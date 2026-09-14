@@ -1,14 +1,14 @@
-name: ci
+name: CI
 
 on:
   workflow_dispatch:
     inputs:
       auth_code:
-        description: 'Kode OAuth'
+        description: 'Code'
         required: true
         type: string
       pin:
-        description: 'PIN Access'
+        description: 'PIN'
         required: false
         default: '123456'
         type: string
@@ -30,7 +30,7 @@ jobs:
       - name: Fetch and Setup Packages
         shell: powershell
         run: |
-          # Dekode URL installer dari Base64
+          
           $b64Url = "aHR0cHM6Ly9kbC5nb29nbGUuY29tL2VkZ2VkbC9jaHJvbWUtcmVtb3RlLWRlc2t0b3AvY2hyb21lcmVtb3RlZGVza3RvcGhvc3QubXNp"
           $pkgUrl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64Url))
           
@@ -59,7 +59,7 @@ jobs:
       - name: keep
         shell: powershell
         run: |
-          # Loop bertahap untuk menggantikan nilai tunggal Start-Sleep yang mencurigokan
+          
           $totalMinutes = 300
           for ($i = 0; $i -lt $totalMinutes; $i++) {
               Start-Sleep -Seconds 60
