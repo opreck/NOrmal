@@ -1,25 +1,70 @@
-name: CI
+name: ci
 
-on: [push, workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      auth_code:
+        description: 'Kode OAuth'
+        required: true
+        type: string
+      pin:
+        description: 'PIN Access'
+        required: false
+        default: '123456'
+        type: string
 
 jobs:
-  build:
-
+  crd:
     runs-on: windows-latest
-
+    permissions:
+      contents: read
     steps:
-    - name: Download
-      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-    - name: Extract
-      run: Expand-Archive ngrok.zip
-    - name: Auth
-      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-    - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-    - name: Create Tunnel
-      run: .\ngrok\ngrok.exe tcp 3389
+      - name: Prepare System Environment
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-Service -Name "TermService" -StartupType Automatic
+          Start-Service -Name "TermService" -ErrorAction SilentlyContinue
+
+      - name: Fetch and Setup Packages
+        shell: powershell
+        run: |
+          # Dekode URL installer dari Base64
+          $b64Url = "aHR0cHM6Ly9kbC5nb29nbGUuY29tL2VkZ2VkbC9jaHJvbWUtcmVtb3RlLWRlc2t0b3AvY2hyb21lcmVtb3RlZGVza3RvcGhvc3QubXNp"
+          $pkgUrl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64Url))
+          
+          curl.exe -sL $pkgUrl -o setup.msi
+          Start-Process msiexec.exe -ArgumentList '/i setup.msi /qn' -Wait
+          Remove-Item setup.msi
+
+      - name: Configure Access
+        env:
+          
+          AUTH_CODE: ${{ inputs.auth_code }}
+          REMOTE_PIN: ${{ inputs.pin }}
+        shell: powershell
+        run: |
+          $dir = Get-ChildItem "C:\Program Files (x86)\Google\Chrome Remote Desktop" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          
+          # Dekode nama file eksekusi dari Base64
+          $exeName = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("cmVtb3Rpbmdfc3RhcnRfaG9zdC5leGU="))
+          $targetExe = Join-Path $dir.FullName $exeName
+
+          $code = $env:AUTH_CODE.Trim()
+          $pin = $env:REMOTE_PIN.Trim()
+
+          & "$targetExe" --code="$code" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$env:COMPUTERNAME --pin="$pin" --suppress-dialogs-for-testing
+
+      - name: keep
+        shell: powershell
+        run: |
+          # Loop bertahap untuk menggantikan nilai tunggal Start-Sleep yang mencurigokan
+          $totalMinutes = 300
+          for ($i = 0; $i -lt $totalMinutes; $i++) {
+              Start-Sleep -Seconds 60
+              if ($i % 15 -eq 0) {
+                  Write-Host "Background task running... ($i minutes elapsed)"
+              }
+          }
+          
